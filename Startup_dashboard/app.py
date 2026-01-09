@@ -47,7 +47,7 @@ def overall_analysis():
 
     fig4, ax4 = plt.subplots(figsize=(12, 5))
     ax4.plot(range(len(temp_df)), temp_df['Amount'])
-    step = max(1, len(temp_df) // 8)  # show ~8 labels
+    step = max(1, len(temp_df) // 8) 
     ax4.set_xticks(range(0, len(temp_df), step))
     ax4.set_xticklabels(temp_df['x_axis'][::step], rotation=45)
     plt.tight_layout()
@@ -151,15 +151,13 @@ def top__in_year(year):
 
 def load_investor_details(investor):
     st.title(investor)
-
-    # Filter dataframe for this investor
+    
     investor_df = df[df['Investors'].str.contains(investor, na=False, case=False)]
 
     if investor_df.empty:
         st.warning(f"No investments found for {investor}")
         return
 
-    # Load the recent 5 investments of the investor
     last5_df = investor_df.head()[['Date', 'Startup', 'Vertical', 'City', 'Round', 'Amount']]
     st.subheader('Most Recent Investments')
     st.dataframe(last5_df)
@@ -167,7 +165,6 @@ def load_investor_details(investor):
     col1, col2 = st.columns(2)
 
     with col1:
-        # Biggest investments
         if not investor_df.empty:
             big_series = investor_df.groupby('Startup')['Amount'].sum().sort_values(ascending=False).head()
             st.subheader('Biggest Investments')
@@ -182,7 +179,6 @@ def load_investor_details(investor):
                 st.write("No data available")
 
     with col2:
-        # Sectors invested in
         if not investor_df.empty:
             vertical_series = investor_df.groupby('Vertical')['Amount'].sum()
             st.subheader('Sectors Invested in')
@@ -197,7 +193,6 @@ def load_investor_details(investor):
     col3, col4 = st.columns(2)
 
     with col3:
-        # Invested Stage
         if not investor_df.empty:
             st.subheader('Invested Stage')
             round_series = investor_df.groupby('Round')['Amount'].sum()
@@ -213,7 +208,6 @@ def load_investor_details(investor):
                 st.write("No data available")
 
     with col4:
-        # By city
         if not investor_df.empty:
             st.subheader('Invested By City')
             city_series = investor_df.groupby('City')['Amount'].sum().sort_values(ascending=False).head(10)
@@ -254,15 +248,10 @@ def find_similar_investors(df , investor_name, top_n=10):
         st.warning(f"No investments found for {investor_name}")
         return pd.DataFrame()
 
-    # Get all startup names where this investor invested
     investor_startups = investor_investments['Startup'].unique()
-
-    # Create a dictionary to track co-investors and their common startups
     co_investor_data = {}
 
-    # For each startup this investor invested in, find other investors
     for startup in investor_startups:
-        # Get all investments in this startup
         startup_investments = df[df['Startup'] == startup]
 
         for idx, row in startup_investments.iterrows():
@@ -272,11 +261,9 @@ def find_similar_investors(df , investor_name, top_n=10):
             investors = str(row['Investors']).split(',')
             investors = [inv.strip() for inv in investors]
 
-            # Remove the main investor from the list
             investors = [inv for inv in investors
                          if investor_name.lower() not in inv.lower() and inv != '']
 
-            # Track each co-investor
             for co_investor in investors:
                 if co_investor not in co_investor_data:
                     co_investor_data[co_investor] = {
@@ -286,8 +273,7 @@ def find_similar_investors(df , investor_name, top_n=10):
 
                 co_investor_data[co_investor]['count'] += 1
                 co_investor_data[co_investor]['common_startups'].add(startup)
-
-    # Convert to DataFrame
+                
     if not co_investor_data:
         return pd.DataFrame()
 
@@ -302,7 +288,6 @@ def find_similar_investors(df , investor_name, top_n=10):
                                 if len(data['common_startups']) > 3 else '')
         })
 
-    # Create DataFrame and sort
     similar_df = pd.DataFrame(results)
     similar_df = similar_df.sort_values('Co-Investment Count', ascending=False).head(top_n)
 
@@ -343,7 +328,6 @@ def startup_detail(startup):
 
 investors = []
 for inv_list in df['Investors'].dropna():
-    # Split by comma and clean up
     for inv in str(inv_list).split(','):
         investors.append(inv.strip())
 
@@ -361,7 +345,6 @@ elif option == 'StartUp':
     selected_startup = st.sidebar.selectbox('Select Startup', startup_options)
     btn1 = st.sidebar.button('Find Startup Details')
     if btn1:
-        # Add your startup analysis code here
         st.write(f"Details for {selected_startup}")
         startup_detail(selected_startup)
 
