@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(layout="wide", page_title="StartUp Analysis")
 
-df = pd.read_csv('./startup_cleaned.csv')
+df = pd.read_csv('startup_cleaned.csv')
 df.dropna(subset=['Date', 'Startup', 'Vertical', 'City', 'Investors', 'Round', 'Amount'], inplace=True)
 df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
 df.dropna(subset=['Date'], inplace=True)
