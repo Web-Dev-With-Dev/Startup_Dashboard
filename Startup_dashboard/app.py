@@ -4,7 +4,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 st.set_page_config(layout="wide", page_title="StartUp Analysis")
-
 url = "https://raw.githubusercontent.com/Web-Dev-With-Dev/Startup_Dashboard/master/Startup_dashboard/startup_cleaned.csv"
 df = pd.read_csv(url)
 df.dropna(subset=['Date', 'Startup', 'Vertical', 'City', 'Investors', 'Round', 'Amount'], inplace=True)
@@ -48,7 +47,7 @@ def overall_analysis():
 
     fig4, ax4 = plt.subplots(figsize=(12, 5))
     ax4.plot(range(len(temp_df)), temp_df['Amount'])
-    step = max(1, len(temp_df) // 8)  # show ~8 labels
+    step = max(1, len(temp_df) // 8)
     ax4.set_xticks(range(0, len(temp_df), step))
     ax4.set_xticklabels(temp_df['x_axis'][::step], rotation=45)
     plt.tight_layout()
@@ -95,6 +94,11 @@ def overall_analysis():
 def create_year_sector_heatmap(df):
     st.header("Year × Sector Funding Heatmap")
     st.caption("See which sectors attracted most funding each year")
+
+    if df.empty:
+        st.warning("No data available for heatmap")
+        return
+
     pivot = df.pivot_table(
         index='Vertical',
         columns='year',
@@ -102,43 +106,57 @@ def create_year_sector_heatmap(df):
         aggfunc='sum',
         fill_value=0
     )
+
+    if pivot.empty:
+        st.warning("No data available for heatmap")
+        return
+
     top_sectors = df.groupby('Vertical')['Amount'].sum().nlargest(20).index
+    if len(top_sectors) == 0:
+        st.warning("No sector data available")
+        return
+
     pivot = pivot.loc[top_sectors]
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        hottest_year = pivot.sum(axis=0).idxmax()
+        hottest_year = pivot.sum(axis=0).idxmax() if not pivot.empty else "N/A"
         st.metric("Hottest Year", hottest_year)
     with col2:
-        hottest_sector = pivot.sum(axis=1).idxmax()
+        hottest_sector = pivot.sum(axis=1).idxmax() if not pivot.empty else "N/A"
         st.metric("Hottest Sector", hottest_sector)
     with col3:
-        peak_value = pivot.max().max()
+        peak_value = pivot.max().max() if not pivot.empty else 0
         st.metric("Peak Funding", f"{peak_value:,.0f} Cr")
 
-    # Create heatmap
     fig, ax = plt.subplots(figsize=(16, 10))
-    sns.heatmap(
-        pivot / 1e6,  # Convert to millions
-        cmap='RdYlGn',
-        linewidths=0.5,
-        ax=ax,
-        cbar_kws={'label': 'Funding (in $ Millions)'}
-    )
-    ax.set_title('Funding Distribution: Sector × Year ($ Millions)', fontsize=16)
-    ax.set_xlabel('Year', fontsize=12)
-    ax.set_ylabel('Industry Sector', fontsize=12)
+    heatmap_data = pivot / 1e6
+    if heatmap_data.sum().sum() > 0:
+        sns.heatmap(
+            heatmap_data,
+            cmap='RdYlGn',
+            linewidths=0.5,
+            ax=ax,
+            cbar_kws={'label': 'Funding (in $ Millions)'}
+        )
+        ax.set_title('Funding Distribution: Sector × Year ($ Millions)', fontsize=16)
+        ax.set_xlabel('Year', fontsize=12)
+        ax.set_ylabel('Industry Sector', fontsize=12)
+        st.pyplot(fig)
+        plt.close(fig)
+    else:
+        st.info("No funding data available for heatmap")
 
-    st.pyplot(fig)
-
-    # Insights
     with st.expander("Key Insights"):
-        st.markdown(f"""
-        1. **{hottest_sector}** received the most cumulative funding
-        2. **{hottest_year}** was the peak funding year overall
-        3. **Emerging Sectors**: {list(pivot.iloc[:, -3:].sum(axis=1).nlargest(3).index)}
-        4. **Declining Sectors**: {list(pivot.iloc[:, -3:].sum(axis=1).nsmallest(3).index)}
-        """)
+        if not pivot.empty:
+            st.markdown(f"""
+            1. **{hottest_sector}** received the most cumulative funding
+            2. **{hottest_year}** was the peak funding year overall
+            3. **Emerging Sectors**: {list(pivot.iloc[:, -3:].sum(axis=1).nlargest(3).index)}
+            4. **Declining Sectors**: {list(pivot.iloc[:, -3:].sum(axis=1).nsmallest(3).index)}
+            """)
+        else:
+            st.info("No insights available due to insufficient data")
 
 
 def city_funded(city):
@@ -153,14 +171,16 @@ def top__in_year(year):
 def load_investor_details(investor):
     st.title(investor)
 
-    # Filter dataframe for this investor
+    if investor is None or investor.strip() == "":
+        st.warning("Please select a valid investor")
+        return
+
     investor_df = df[df['Investors'].str.contains(investor, na=False, case=False)]
 
     if investor_df.empty:
         st.warning(f"No investments found for {investor}")
         return
 
-    # Load the recent 5 investments of the investor
     last5_df = investor_df.head()[['Date', 'Startup', 'Vertical', 'City', 'Round', 'Amount']]
     st.subheader('Most Recent Investments')
     st.dataframe(last5_df)
@@ -168,83 +188,114 @@ def load_investor_details(investor):
     col1, col2 = st.columns(2)
 
     with col1:
-        # Biggest investments
         if not investor_df.empty:
             big_series = investor_df.groupby('Startup')['Amount'].sum().sort_values(ascending=False).head()
             st.subheader('Biggest Investments')
-            if not big_series.empty:
-                fig, ax = plt.subplots()
+            if not big_series.empty and len(big_series) > 0:
+                fig, ax = plt.subplots(figsize=(8, 5))
                 ax.bar(big_series.index, big_series.values, color='blue')
                 ax.set_xticklabels(big_series.index, rotation=45, ha='right')
-                ax.set_ylabel('Amount')
+                ax.set_ylabel('Amount (in Cr)')
                 plt.tight_layout()
                 st.pyplot(fig)
+                plt.close(fig)
             else:
-                st.write("No data available")
+                st.info("No investment data available for visualization")
 
     with col2:
-        # Sectors invested in
         if not investor_df.empty:
             vertical_series = investor_df.groupby('Vertical')['Amount'].sum()
             st.subheader('Sectors Invested in')
-            if not vertical_series.empty:
-                fig1, ax1 = plt.subplots()
-                ax1.pie(vertical_series.values, labels=vertical_series.index, autopct='%0.01f%%',
-                        shadow=False, startangle=90)
-                st.pyplot(fig1)
+
+            if vertical_series.empty or vertical_series.sum() == 0:
+                st.info("No sector-wise investment data available")
             else:
-                st.write("No data available")
+                vertical_series = vertical_series[vertical_series > 0]
+
+                if len(vertical_series) == 0:
+                    st.info("No sector data with positive investments")
+                elif len(vertical_series) == 1:
+                    fig1, ax1 = plt.subplots(figsize=(6, 6))
+                    ax1.pie([100], labels=[vertical_series.index[0]], autopct='%0.1f%%', startangle=90)
+                    ax1.set_title("Investment by Sector")
+                    st.pyplot(fig1)
+                    plt.close(fig1)
+                else:
+                    fig1, ax1 = plt.subplots(figsize=(8, 8))
+                    ax1.pie(
+                        vertical_series.values,
+                        labels=vertical_series.index,
+                        autopct='%0.1f%%',
+                        startangle=90,
+                        shadow=True
+                    )
+                    ax1.set_title("Investment by Sector")
+                    plt.tight_layout()
+                    st.pyplot(fig1)
+                    plt.close(fig1)
 
     col3, col4 = st.columns(2)
 
     with col3:
-        # Invested Stage
         if not investor_df.empty:
             st.subheader('Invested Stage')
             round_series = investor_df.groupby('Round')['Amount'].sum()
-            if not round_series.empty:
-                fig2, ax2 = plt.subplots()
-                ax2.plot(round_series.index, round_series.values, marker='o')
+            if not round_series.empty and len(round_series) > 0:
+                fig2, ax2 = plt.subplots(figsize=(8, 5))
+                if round_series.index.dtype == 'object':
+                    ax2.bar(range(len(round_series)), round_series.values)
+                    ax2.set_xticks(range(len(round_series)))
+                    ax2.set_xticklabels(round_series.index, rotation=45, ha='right')
+                else:
+                    ax2.plot(round_series.index, round_series.values, marker='o')
                 ax2.set_xlabel('Round')
-                ax2.set_ylabel('Amount')
-                ax2.set_xticklabels(round_series.index, rotation=45, ha='right')
+                ax2.set_ylabel('Amount (in Cr)')
+                ax2.set_title('Investment by Round')
                 plt.tight_layout()
                 st.pyplot(fig2)
+                plt.close(fig2)
             else:
-                st.write("No data available")
+                st.info("No round-wise data available")
 
     with col4:
-        # By city
         if not investor_df.empty:
             st.subheader('Invested By City')
-            city_series = investor_df.groupby('City')['Amount'].sum().sort_values(ascending=False).head(10)
+            city_series = investor_df.groupby('City')['Amount'].sum()
+            city_series = city_series[city_series > 0].sort_values(ascending=False).head(10)
 
-            if not city_series.empty:
-                fig, ax = plt.subplots()
-                ax.bar(city_series.index, city_series.values)
+            if not city_series.empty and len(city_series) > 0:
+                fig, ax = plt.subplots(figsize=(8, 5))
+                ax.bar(city_series.index, city_series.values, color='green')
                 ax.set_xlabel('City')
-                ax.set_ylabel('Amount')
-                ax.set_title('Top 10 Cities by Investment')
+                ax.set_ylabel('Amount (in Cr)')
+                ax.set_title('Top Cities by Investment')
                 ax.set_xticklabels(city_series.index, rotation=45, ha='right')
                 plt.tight_layout()
                 st.pyplot(fig)
+                plt.close(fig)
             else:
-                st.write("No data available")
+                st.info("No city-wise data available")
 
-    # Investment Year
     if not investor_df.empty:
         st.subheader('Investment Year')
         year_series = investor_df.groupby('year')['Amount'].sum()
-        if not year_series.empty:
-            fig3, ax3 = plt.subplots()
-            ax3.plot(year_series.index, year_series.values, marker='*')
+        year_series = year_series[year_series > 0]
+
+        if not year_series.empty and len(year_series) > 0:
+            fig3, ax3 = plt.subplots(figsize=(10, 5))
+            ax3.plot(year_series.index, year_series.values, marker='*', linewidth=2, markersize=8)
             ax3.set_xlabel('Year')
-            ax3.set_ylabel('Amount')
+            ax3.set_ylabel('Amount (in Cr)')
+            ax3.set_title('Investment Trend Over Years')
             ax3.grid(True, alpha=0.3)
+
+            ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{int(x)} Cr'))
+
             plt.tight_layout()
             st.pyplot(fig3)
+            plt.close(fig3)
         else:
-            st.write("No data available")
+            st.info("No yearly investment data available")
 
 
 def find_similar_investors(df , investor_name, top_n=10):
@@ -255,15 +306,11 @@ def find_similar_investors(df , investor_name, top_n=10):
         st.warning(f"No investments found for {investor_name}")
         return pd.DataFrame()
 
-    # Get all startup names where this investor invested
     investor_startups = investor_investments['Startup'].unique()
 
-    # Create a dictionary to track co-investors and their common startups
     co_investor_data = {}
 
-    # For each startup this investor invested in, find other investors
     for startup in investor_startups:
-        # Get all investments in this startup
         startup_investments = df[df['Startup'] == startup]
 
         for idx, row in startup_investments.iterrows():
@@ -273,11 +320,9 @@ def find_similar_investors(df , investor_name, top_n=10):
             investors = str(row['Investors']).split(',')
             investors = [inv.strip() for inv in investors]
 
-            # Remove the main investor from the list
             investors = [inv for inv in investors
                          if investor_name.lower() not in inv.lower() and inv != '']
 
-            # Track each co-investor
             for co_investor in investors:
                 if co_investor not in co_investor_data:
                     co_investor_data[co_investor] = {
@@ -288,7 +333,6 @@ def find_similar_investors(df , investor_name, top_n=10):
                 co_investor_data[co_investor]['count'] += 1
                 co_investor_data[co_investor]['common_startups'].add(startup)
 
-    # Convert to DataFrame
     if not co_investor_data:
         return pd.DataFrame()
 
@@ -303,7 +347,6 @@ def find_similar_investors(df , investor_name, top_n=10):
                                 if len(data['common_startups']) > 3 else '')
         })
 
-    # Create DataFrame and sort
     similar_df = pd.DataFrame(results)
     similar_df = similar_df.sort_values('Co-Investment Count', ascending=False).head(top_n)
 
@@ -344,7 +387,6 @@ def startup_detail(startup):
 
 investors = []
 for inv_list in df['Investors'].dropna():
-    # Split by comma and clean up
     for inv in str(inv_list).split(','):
         investors.append(inv.strip())
 
@@ -362,7 +404,6 @@ elif option == 'StartUp':
     selected_startup = st.sidebar.selectbox('Select Startup', startup_options)
     btn1 = st.sidebar.button('Find Startup Details')
     if btn1:
-        # Add your startup analysis code here
         st.write(f"Details for {selected_startup}")
         startup_detail(selected_startup)
 
